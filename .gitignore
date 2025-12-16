@@ -1,0 +1,47 @@
+# --- Build Directories (Ninja/CMake) ---
+build/
+out/
+bin/
+lib/
+cmake-build-*/
+
+# --- Temporary Build Files ---
+CMakeCache.txt
+CMakeFiles/
+*.cmake
+Makefile
+install_manifest.txt
+compile_commands.json
+
+# --- Binary/Executable Outputs ---
+*.exe
+*.dll
+*.so
+*.dylib
+*.lib
+*.a
+*.pdb
+*.obj
+*.o
+
+# --- Your Scripts ---
+*.bat
+*.ps1
+*.sh
+# If you have specific scripts you WANT to track, 
+# you can un-ignore them like this:
+# !build_project.bat
+
+# --- Dependency Management (vcpkg) ---
+
+
+# --- IDE/Editor Settings ---
+.vscode/
+.idea/
+*.sln
+*.vcxproj
+*.vcxproj.user
+
+# --- OS Files ---
+.DS_Store
+Thumbs.db
