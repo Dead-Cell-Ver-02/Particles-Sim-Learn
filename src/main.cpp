@@ -6,10 +6,11 @@ int main() {
     const int width = 1280;
     const int height = 720;
     InitWindow(width, height, "Particle Life - Day 1");
+    SetWindowState(FLAG_WINDOW_RESIZABLE);
     SetTargetFPS(60);
 
     World world(width, height);
-    world.SpawnRandom(1000); // Start with 1000
+    world.SpawnRandom(2000); // Start with 1000
 
     // 2. Loop
     while (!WindowShouldClose()) {
