@@ -1,10 +1,11 @@
 #pragma once
+#include <raylib.h>
 #include <vector>
 #include <array>
+#include <thread>
 #include "core/particle.h"
 #include "spatial/spatialhash.h"
 
-// Constants
 constexpr int NUM_TYPES = 6;
 
 class World {
@@ -26,5 +27,11 @@ private:
     
     // parameters
     float m_Rules[NUM_TYPES][NUM_TYPES]; 
-    Color m_Colors[NUM_TYPES];           
+    Color m_Colors[NUM_TYPES];  
+    Color m_FadedColors[NUM_TYPES];
+    Texture2D m_ParticleTexture;
+
+    // threading
+    int m_NumThreads;
+    void updateParticleRange(int start, int end, float dt, float invCellSize, float intRad2);
 };

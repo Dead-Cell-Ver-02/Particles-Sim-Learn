@@ -1,35 +1,34 @@
 #include "spatial/spatialhash.h"
 #include <cmath>
 
-SpatialHash::SpatialHash(float cellSize) : m_Cellsize(cellSize) {}
-
-void SpatialHash::clear() {
-  m_Grid.clear();
+SpatialHash::SpatialHash(float cellSize, int width, int height) : m_Cellsize(cellSize) {
+  m_Cols = (int)(width / cellSize) + 1;
+  m_Rows = (int)(height / cellSize) + 1;
+  m_Grid.resize(m_Cols * m_Rows);
+  m_Generations.resize(m_Cols * m_Rows, -1);
 }
 
-int SpatialHash::Getkey(Vector2 pos) {
-  int x = std::floor(pos.x / m_Cellsize);
-  int y = std::floor(pos.y / m_Cellsize);
-
-  return 73856093 * x ^ 19349663 * y;
+void SpatialHash::clear() {
+  for (auto& cell : m_Grid)
+    cell.clear();
 }
 
 void SpatialHash::insert(int particleIndex, Vector2 position) {
-  m_Grid[Getkey(position)].push_back(particleIndex);
-}
+  int x = (int)std::floor(position.x / m_Cellsize);
+  int y = (int)std::floor(position.y / m_Cellsize);
 
-void SpatialHash::query(Vector2 pos, std::vector<int>& outPotentialNBS) {
-  int cx = (int)std::floor(pos.x / m_Cellsize);
-  int cy = (int)std::floor(pos.y / m_Cellsize);
+  if (x < 0 || y < 0 || x >= m_Cols || y >= m_Rows)
+    return;
 
-  for(int i = cx - 1; i <= cx + 1; i++) {
-    for(int j = cy - 1; j <= cy + 1; j++) {
-      int key = i * 73856093 ^ 19349663 * j;
-      if (m_Grid.count(key)) {
-        const auto& cell = m_Grid.at(key);
-        outPotentialNBS.insert(outPotentialNBS.end(), cell.begin(), cell.end());
-      } 
-    }
+  int idx = y * m_Cols + x;
+  
+  if (m_Generations[idx] != m_CurrentGeneration) {
+      m_Grid[idx].clear();
+      m_Generations[idx] = m_CurrentGeneration;
   }
+  
+  m_Grid[idx].push_back(particleIndex);
 }
+
+
 
