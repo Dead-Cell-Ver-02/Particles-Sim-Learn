@@ -6,6 +6,7 @@
 #include <immintrin.h>
 #include "core/particle.h"
 #include "spatial/spatialhash.h"
+#include "threadpool/threadpool.h"
 
 constexpr int NUM_TYPES = 6;
 
@@ -31,6 +32,8 @@ private:
     Texture2D m_ParticleTexture;
 
     int m_NumThreads;
+    ThreadPool m_ThreadPool;
+    
     void updateParticleRange(int start, int end, float dt, float beta, float invRadius, float invBeta, float invOneMinusBeta, float intRad2);
 
     inline float getRule(int typeA, int typeB) const {

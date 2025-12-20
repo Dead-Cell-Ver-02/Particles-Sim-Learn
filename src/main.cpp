@@ -1,5 +1,6 @@
 #include <raylib.h>
 #include "core/World.h"
+#include <tracy/Tracy.hpp>
 
 int main() {
     const int width = 1280;
@@ -23,6 +24,8 @@ int main() {
         world.Draw();
         DrawFPS(10, 10);
         EndDrawing();
+
+        FrameMark;
     }
 
     CloseWindow();
