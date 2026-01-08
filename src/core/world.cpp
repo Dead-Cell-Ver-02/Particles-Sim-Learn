@@ -1,213 +1,108 @@
-#include "core/world.h"
+#include "world.h"
+#include "config/config.h"
+#include "physicsSystem.h"
+#include "renderingSystem.h"
 #include <raylib.h>
-#include <raymath.h>
-#include <tracy/Tracy.hpp>
 
-constexpr float FRICTION = 0.80f;
-constexpr float INTERACTION_RADIUS = 50.0f;
-
-
-World::World(int width, int height) : 
-  m_Width(width), 
-  m_Height(height), 
-  m_SpatialHash(INTERACTION_RADIUS, 1280, 720), 
-  m_NumThreads(std::thread::hardware_concurrency()),
-  m_ThreadPool(std::thread::hardware_concurrency()) {
-
-  if (m_NumThreads == 0) m_NumThreads = 4;
-
-  Image img = GenImageGradientRadial(16, 16, 0.0f, WHITE, BLANK); 
-  m_ParticleTexture = LoadTextureFromImage(img);
-  UnloadImage(img);
-  
-  m_Colors[0] = Color{119, 124, 109, 255};
-  m_Colors[1] = Color{183, 184, 159, 255};
-  m_Colors[2] = Color{203, 203, 203, 255};
-  m_Colors[3] = Color{238, 238, 238, 255};
-  m_Colors[4] = Color{220,  20,  60, 255};
-  m_Colors[5] = Color{255, 255,  20, 255};
-
-  for (int i = 0; i < NUM_TYPES; i++) {
-    m_FadedColors[i] = Fade(m_Colors[i], 0.8f); 
-  }
-
-  float initialRules[NUM_TYPES * NUM_TYPES] = {
-      0,  1,  1, -0.5f, -2,  0,
-      -1,  0,  0,  1,  0,  0.5f,
-      0,  0.5f, 0, 0.2f, -1, 0,
-      0,  1,  0.2f, 0, -0.5f, 1,
-      -2, 0, -1, -1, 0, 0,
-      0, 0.5f, 1, 1, -0.2f, 0
-  };
-
-  std::memcpy(m_Rules, initialRules, sizeof(initialRules));
-}
-
-void World::SpawnRandom(int count) {
-  ZoneScoped;
-  m_Particles.reserve(m_Particles.size() + count);
-  
-  for (int i = 0; i < count; i++) {
-    m_Particles.add(
-      (float)GetRandomValue(0, m_Width),
-      (float)GetRandomValue(0, m_Height),
-      (uint8_t)GetRandomValue(0, NUM_TYPES - 1)
-    );
-  }
-}
-
-void World::Update(float dt) {
-  ZoneScoped;
-  const float R = INTERACTION_RADIUS;
-  const float beta = 0.3f;
-
-  const float invRadius = 1.0f / R;
-  const float invBeta = 1.0f / beta;
-  const float invOneMinusBeta = 1.0f / (1.0f - beta);
-  const float intRad2 = R * R;
-
-  const size_t pCount = m_Particles.size();
-  {
-    ZoneScopedN("Spatial Hash");
-    m_SpatialHash.beginFrame(); 
-
-    for (size_t i = 0; i < pCount; i++) {
-      Vector2 pos = {m_Particles.posX[i], m_Particles.posY[i]};
-      m_SpatialHash.insert((int)i, pos);
-    }
-  }
-
-  {
-    ZoneScopedN("Submit Work");
-    int particlesPerThread = pCount / m_NumThreads;
-
-    for (int t = 0; t < m_NumThreads; t++) {
-      int start = t * particlesPerThread;
-      int end = (t == m_NumThreads - 1) ? pCount : start + particlesPerThread;
-
-      m_ThreadPool.SubmitWork([=]() {
-        this->updateParticleRange(start, end, dt, beta, invRadius, invBeta, invOneMinusBeta, intRad2);
-      });
-    }
-  }
-
-  {
-    ZoneScopedN("Wait for Workers");
-    m_ThreadPool.WaitForCompletion();
-  }
-}
-
-void World::updateParticleRange(int start, int end, float dt, float beta, float invRadius, float invBeta, 
-                                float invOneMinusBeta, float intRad2) {
-
-  ZoneScopedN("Particle Worker Task");
-  const float friction = FRICTION;
-  const float forceScalar = 100.0f;
-
-  for (int i = start; i < end; i++) {
-      float fx = 0.0f;
-      float fy = 0.0f;
-      
-      float px = m_Particles.posX[i];
-      float py = m_Particles.posY[i];
-      int pType = m_Particles.type[i];
-
-      int cx = (int)(px * invRadius);
-      int cy = (int)(py * invRadius);
-
-      {
-        ZoneScopedN("Grid Search");
-        for (int nx = cx - 1; nx <= cx + 1; nx++) {
-          for (int ny = cy - 1; ny <= cy + 1; ny++) {
-            int tx = (nx + m_SpatialHash.m_Cols) % m_SpatialHash.m_Cols;
-            int ty = (ny + m_SpatialHash.m_Rows) % m_SpatialHash.m_Rows;
-            const auto& cell = m_SpatialHash.getCell(tx, ty);
-
-            if (cell.empty()) continue;
-
-            for (int j : cell) {
-              if (i == j) continue;
-              
-              float dx = m_Particles.posX[j] - px;
-              float dy = m_Particles.posY[j] - py;
-
-              if (dx > m_Width * 0.5f) dx -= m_Width;
-              else if (dx < -m_Width * 0.5f) dx += m_Width;
-              if (dy > m_Height * 0.5f) dy -= m_Height;
-              else if (dy < -m_Height * 0.5f) dy += m_Height;
-
-              float d2 = dx * dx + dy * dy;
-              if (d2 < intRad2 && d2 > 0.0001f) {
-                float invSqrtD2 = 1.0f / sqrtf(d2);
-                float d         = d2 * invSqrtD2;
-                float r         = d * invRadius;
-
-                float inLinear = (r < beta);
-                float inBell   = (r >= beta) & (r < 1.0f);
-
-                float linearMultiplier =
-                    (1.0f / (INTERACTION_RADIUS * beta)) - invSqrtD2;
-
-                float rule = getRule(pType, m_Particles.type[j]);
-                float bell =
-                    rule * (1.0f - fabsf(2.0f * r - 1.0f - beta) * invOneMinusBeta);
-                float bellMultiplier = bell * invSqrtD2;
-
-                float multiplier =
-                    inLinear * linearMultiplier +
-                    inBell   * bellMultiplier;
-
-                fx += dx * multiplier;
-                fy += dy * multiplier;
-              }
-            }
-          }        
-        }
-      }
-      m_Particles.velX[i] = (m_Particles.velX[i] + fx * forceScalar * dt) * friction;
-      m_Particles.velY[i] = (m_Particles.velY[i] + fy * forceScalar * dt) * friction;
-
-      m_Particles.posX[i] += m_Particles.velX[i] * dt;
-      m_Particles.posY[i] += m_Particles.velY[i] * dt;
-
-      if (m_Particles.posX[i] < 0) m_Particles.posX[i] += m_Width;
-      if (m_Particles.posX[i] > m_Width) m_Particles.posX[i] -= m_Width;
-      if (m_Particles.posY[i] < 0) m_Particles.posY[i] += m_Height;
-      if (m_Particles.posY[i] > m_Height) m_Particles.posY[i] -= m_Height;
-  }
-}
-
-void World::Draw() {
-  ZoneScoped;
-    Vector2 origin = { 
-      (float)m_ParticleTexture.width / 2.0f, 
-      (float)m_ParticleTexture.height / 2.0f 
-    };
-    const float particleSize = 2.5f;
+_Simulation::_Simulation(const _simulation_config& _config)
+    : m_config(_config)
+{
+    m_num_threads = std::thread::hardware_concurrency();
+    if (m_num_threads == 0) m_num_threads = 4;
     
-    const size_t pCount = m_Particles.size();
-    for (size_t i = 0; i < pCount; i++) {
-        Rectangle source = { 
-          0.0f, 0.0f, 
-          (float)m_ParticleTexture.width, 
-          (float)m_ParticleTexture.height 
-        };
-        Rectangle dest = { 
-          m_Particles.posX[i], 
-          m_Particles.posY[i], 
-          particleSize * 2.0f, 
-          particleSize * 2.0f 
-        };
-        
-        DrawTexturePro(
-          m_ParticleTexture, 
-          source, 
-          dest, 
-          origin, 
-          0.0f, 
-          m_FadedColors[m_Particles.type[i]]
-        );
+    _initialize_systems();
+    
+    if (m_config._ARENA._INITIAL_PARTICLE_COUNT > 0) {
+        _spawn_particles(m_config._ARENA._INITIAL_PARTICLE_COUNT);
     }
 }
 
+void _Simulation::_update(float _dt) {
+    if (m_physics_system) {
+        m_physics_system->_update(m_particles, _dt);
+    }
+}
 
+void _Simulation::_render() {
+    if (m_renderer) {
+        // Don't begin/end frame here - let Application handle it
+        m_renderer->_render(m_particles);
+    }
+}
+
+void _Simulation::_spawn_particles(int _count) {
+    m_particles.reserve(m_particles.size() + _count);
+    
+    for (int i = 0; i < _count; i++) {
+        float x = static_cast<float>(GetRandomValue(0, m_config._ARENA._WIDTH));
+        float y = static_cast<float>(GetRandomValue(0, m_config._ARENA._HEIGHT));
+        uint8_t type = static_cast<uint8_t>(GetRandomValue(0, _NUM_PARTICLES_TYPES - 1));
+        
+        m_particles.add(x, y, type);
+    }
+}
+
+void _Simulation::_spawn_particle_at(float _x, float _y, int _type) {
+    if (_type >= 0 && _type < _NUM_PARTICLES_TYPES) {
+        m_particles.add(_x, _y, static_cast<uint8_t>(_type));
+    }
+}
+
+void _Simulation::_clear() {
+    m_particles.clear();
+    
+    if (m_physics_system) {
+        m_physics_system->_clear();
+    }
+}
+
+void _Simulation::_reset() {
+    _clear();
+    if (m_config._ARENA._INITIAL_PARTICLE_COUNT > 0) {
+        _spawn_particles(m_config._ARENA._INITIAL_PARTICLE_COUNT);
+    }
+}
+
+void _Simulation::_set_interaction_rule(int _typeA, int _typeB, float _strength) {
+    if (auto* physicsSystem = dynamic_cast<_Particle_Physics_System*>(m_physics_system.get())) {
+        physicsSystem->_set_interaction_rule(_typeA, _typeB, _strength);
+        m_config._INTERACTION_RULES[_typeA * _NUM_PARTICLES_TYPES + _typeB] = _strength;
+    }
+}
+
+void _Simulation::_set_particle_color(int _type, Color _color) {
+    if (auto* _renderer = dynamic_cast<_Particle_Renderer*>(m_renderer.get())) {
+        _renderer->_set_particle_color(_type, _color);
+        m_config._RENDER._PARTICLE_COLORS[_type] = _color;
+    }
+}
+
+void _Simulation::_update_physics_config(const _physics_config& _config) {
+    m_config._PHYSICS = _config;
+    m_physics_system = std::make_unique<_Particle_Physics_System>(
+        m_config._PHYSICS,
+        m_config._INTERACTION_RULES,
+        m_config._ARENA._WIDTH,
+        m_config._ARENA._HEIGHT
+    );
+}
+
+void _Simulation::_update_render_config(const _render_config& _config) {
+    m_config._RENDER = _config;
+    if (auto* _renderer = dynamic_cast<_Particle_Renderer*>(m_renderer.get())) {
+        _renderer->_update_config(_config);
+    }
+}
+
+void _Simulation::_initialize_systems() {
+    m_physics_system = std::make_unique<_Particle_Physics_System>(
+        m_config._PHYSICS,
+        m_config._INTERACTION_RULES,
+        m_config._ARENA._WIDTH,
+        m_config._ARENA._HEIGHT
+    );
+    
+    m_renderer = std::make_unique<_Particle_Renderer>(m_config._RENDER);
+    
+    m_threadpool = std::make_unique<ThreadPool>(m_num_threads);
+}

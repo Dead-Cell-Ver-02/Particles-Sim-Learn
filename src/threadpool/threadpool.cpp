@@ -1,5 +1,4 @@
 #include "threadpool.h"
-// i do not get a lot of parts
 
 ThreadPool::ThreadPool(int numThreads) : m_ActiveJobs(0), m_Shutdown(false) {
     for (int i = 0; i < numThreads; i++) {
@@ -8,7 +7,10 @@ ThreadPool::ThreadPool(int numThreads) : m_ActiveJobs(0), m_Shutdown(false) {
 }
 
 ThreadPool::~ThreadPool() {
-    m_Shutdown = true;
+    {
+        std::lock_guard<std::mutex> lock(m_QueueMutex);
+        m_Shutdown = true;
+    }
     m_Condition.notify_all();
     
     for (auto& thread : m_Workers) {
@@ -24,6 +26,7 @@ void ThreadPool::WorkerThread(int threadID) {
         
         {
             std::unique_lock<std::mutex> lock(m_QueueMutex);
+            
             m_Condition.wait(lock, [this] { 
                 return !m_WorkQueue.empty() || m_Shutdown; 
             });
@@ -41,25 +44,27 @@ void ThreadPool::WorkerThread(int threadID) {
         if (job) {
             try {
                 job();
-            } catch (...) {
-
-            }
-
-            int jobsLeft = --m_ActiveJobs; 
+            } catch (...) {}
             
-            if (jobsLeft == 0) {
-                m_WaitCondition.notify_all();
+            // CRITICAL FIX: Do this inside lock
+            {
+                std::lock_guard<std::mutex> lock(m_QueueMutex);
+                m_ActiveJobs--;
+                
+                if (m_ActiveJobs == 0 && m_WorkQueue.empty()) {
+                    m_WaitCondition.notify_all();
+                }
             }
         }
     }
 }
 
 void ThreadPool::SubmitWork(std::function<void()> work) {
-    m_ActiveJobs++; 
-    
     {
         std::lock_guard<std::mutex> lock(m_QueueMutex);
-        m_WorkQueue.push(std::move(work)); 
+        // CRITICAL FIX: Increment inside lock
+        m_ActiveJobs++;
+        m_WorkQueue.push(std::move(work));
     }
     m_Condition.notify_one();
 }

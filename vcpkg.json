@@ -3,7 +3,8 @@
   "version": "1.0",
   "dependencies": [
     "raylib",
-    "tracy"
+    "tracy",
+    "raygui"
   ]
 }
 

@@ -14,20 +14,21 @@ void SpatialHash::clear() {
 }
 
 void SpatialHash::insert(int particleIndex, Vector2 position) {
-  int x = (int)std::floor(position.x / m_Cellsize);
-  int y = (int)std::floor(position.y / m_Cellsize);
+    int x = (int)(position.x / m_Cellsize);
+    int y = (int)(position.y / m_Cellsize);
 
-  if (x < 0 || y < 0 || x >= m_Cols || y >= m_Rows)
-    return;
+    if (x < 0 || y < 0 || x >= m_Cols || y >= m_Rows) return;
 
-  int idx = y * m_Cols + x;
-  
-  if (m_Generations[idx] != m_CurrentGeneration) {
-      m_Grid[idx].clear();
-      m_Generations[idx] = m_CurrentGeneration;
-  }
-  
-  m_Grid[idx].push_back(particleIndex);
+    int idx = y * m_Cols + x;
+    
+    // Check generation to "clear" cell without deallocating memory
+    if (m_Generations[idx] != m_CurrentGeneration) {
+        m_Grid[idx].clear(); 
+        m_Generations[idx] = m_CurrentGeneration;
+    }
+    
+    // Suggestion: Reserve capacity for m_Grid[idx] in constructor to avoid reallocs
+    m_Grid[idx].push_back(particleIndex);
 }
 
 

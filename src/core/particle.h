@@ -19,7 +19,7 @@
 #include <cstdint>
 #include <cassert>
 
-struct ParticleSystem {
+struct _Particle_System {
     std::vector<float> posX, posY;
 
     std::vector<float> velX, velY;

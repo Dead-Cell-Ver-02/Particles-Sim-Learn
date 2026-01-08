@@ -1,3 +1,5 @@
+#pragma once
+
 #include <vector>
 #include <queue>
 #include <thread>
@@ -22,9 +24,8 @@ private:
     
     std::mutex m_QueueMutex;
     std::condition_variable m_Condition;
-    
-    // For WaitForCompletion
     std::condition_variable m_WaitCondition; 
-    std::atomic<int> m_ActiveJobs; 
+    
+    std::atomic<int> m_ActiveJobs;
     std::atomic<bool> m_Shutdown;
 };

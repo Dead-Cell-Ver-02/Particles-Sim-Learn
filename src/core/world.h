@@ -1,42 +1,40 @@
 #pragma once
 
-#include <raylib.h>
-#include <vector>
-#include <thread>
-#include <immintrin.h>
 #include "core/particle.h"
-#include "spatial/spatialhash.h"
-#include "threadpool/threadpool.h"
+#include "physicsSystem.h"
+#include "renderingSystem.h"
+#include "config/config.h"
+#include <memory>
 
-constexpr int NUM_TYPES = 6;
-
-class World {
+class _Simulation {
 public:
-    World(int width, int height);
-
-    void Update(float dt);
-    void Draw();
-
-    void SpawnRandom(int count);
-
-    int GetParticleCount() const { return (int)m_Particles.size(); }
-
-private:
-    int m_Width, m_Height;
-    ParticleSystem m_Particles;
-    SpatialHash m_SpatialHash;
-
-    alignas(32) float m_Rules[NUM_TYPES * NUM_TYPES];
-    Color m_Colors[NUM_TYPES];
-    Color m_FadedColors[NUM_TYPES];
-    Texture2D m_ParticleTexture;
-
-    int m_NumThreads;
-    ThreadPool m_ThreadPool;
+    explicit _Simulation(const _simulation_config& _config);
     
-    void updateParticleRange(int start, int end, float dt, float beta, float invRadius, float invBeta, float invOneMinusBeta, float intRad2);
-
-    inline float getRule(int typeA, int typeB) const {
-        return m_Rules[typeA * NUM_TYPES + typeB];
-    }
+    void _update(float dt);
+    void _render();
+    
+    void _spawn_particles(int count);
+    void _spawn_particle_at(float x, float y, int type);
+    void _clear();
+    void _reset();  
+    
+    int _get_particle_count() const { return static_cast<int>(m_particles.size()); }
+    const _simulation_config& _get_config() const { return m_config; }
+    
+    void _set_interaction_rule(int _typeA, int _typeB, float _strength);
+    void _set_particle_color(int _type, Color _color);
+    void _update_physics_config(const _physics_config& _config);
+    void _update_render_config(const _render_config& _config);
+    
+private:
+    _simulation_config m_config;
+    _Particle_System m_particles;
+    
+    std::unique_ptr<_Physics_System> m_physics_system;
+    std::unique_ptr<_Particle_Renderer> m_renderer;
+    std::unique_ptr<ThreadPool> m_threadpool;
+    
+    int m_num_threads;
+    
+    void _initialize_systems();
 };
