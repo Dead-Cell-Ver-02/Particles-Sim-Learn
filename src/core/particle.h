@@ -7,7 +7,7 @@
 //     float size;
 //     int type;
 
-//     Particle(float x, float y, int t, float s) 
+//     Particle(float x, float y, int t, float s)
 //         : pos{x, y}, vel{0, 0}, type(t), size(s) {}
 // }; AoS structre
 
@@ -19,7 +19,8 @@
 #include <cstdint>
 #include <cassert>
 
-struct _Particle_System {
+struct _Particle_System
+{
     std::vector<float> posX, posY;
 
     std::vector<float> velX, velY;
@@ -30,7 +31,8 @@ struct _Particle_System {
 
     size_t size() const { return posX.size(); }
 
-    void reserve (size_t capacity) {
+    void reserve(size_t capacity)
+    {
         posX.reserve(capacity);
         posY.reserve(capacity);
         velX.reserve(capacity);
@@ -38,7 +40,8 @@ struct _Particle_System {
         type.reserve(capacity);
     }
 
-    void resize (size_t newsize) {
+    void resize(size_t newsize)
+    {
         posX.resize(newsize);
         posY.resize(newsize);
         velX.resize(newsize);
@@ -46,7 +49,8 @@ struct _Particle_System {
         type.resize(newsize);
     }
 
-    void add (float x, float y, uint8_t t) {
+    void add(float x, float y, uint8_t t)
+    {
         posX.push_back(x);
         posY.push_back(y);
         velX.push_back(0.0f);
@@ -54,7 +58,8 @@ struct _Particle_System {
         type.push_back(t);
     }
 
-    void clear() {
+    void clear()
+    {
         posX.clear();
         posY.clear();
         velX.clear();
@@ -62,13 +67,13 @@ struct _Particle_System {
         type.clear();
     }
 
-    void assertConsistent() const {
+    void assertConsistent() const
+    {
         assert(posX.size() == posY.size());
         assert(posX.size() == velX.size());
         assert(posX.size() == velY.size());
         assert(posX.size() == type.size());
     }
-    
 };
 
 // SoA structure
